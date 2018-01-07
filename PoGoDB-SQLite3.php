@@ -41,38 +41,32 @@ class PoGoDB_SQLite3 extends PoGoDB {
 		$sql = "
 			SELECT
 				users.pogoname AS pogoname,
-				sum(scorelog_entries.recordedValue - scorelog_entriesprev.oldvalue) AS totalscore
+				sum(
+					scorelog_entries.recordedValue - ( 
+						SELECT
+							max(scorelog_entries2.recordedValue) 
+						FROM scorelog_entries AS scorelog_entries2
+						WHERE scorelog_entries2.recordedTime < scorelog_entries.recordedTime
+						  AND scorelog_entries2.user_uuid = scorelog_entries.user_uuid
+					)
+				) as score
 			FROM 
 				scorelog_entries
 			INNER JOIN users 
-				ON users.uuid = user_uuid 
-			LEFT JOIN
-				(
-					SELECT
-						user_uuid AS olduuid,
-						recordedTime AS oldday,
-						sum(recordedValue) AS oldvalue
-					FROM scorelog_entries
-					GROUP BY
-						olduuid,
-						oldday
-					ORDER BY oldday DESC
-				) AS scorelog_entriesprev ON
-					scorelog_entriesprev.olduuid = scorelog_entries.user_uuid
-					AND scorelog_entriesprev.oldday < scorelog_entries.recordedTime
+				ON users.uuid = user_uuid
 			WHERE
-				scorelog_entriesprev.oldvalue IS NOT NULL
-				AND scorelog_entries.recordedTime >= :startunixts
-				AND scorelog_entries.recordedTime <= :endunixts
-			GROUP BY pogoname
-			ORDER BY totalscore DESC; ";
+				scorelog_entries.recordedTime >= :startunixts 
+				AND scorelog_entries.recordedTime <= :endunixts 
+			GROUP BY
+				pogoname
+			ORDER BY score DESC; ";
 		$statement = $this->db_connection->prepare($sql);
 		$statement->bindValue(':startunixts', $startunixts);
 		$statement->bindValue(':endunixts', $endunixts);
 		$result = $statement->execute();
 		$returnArray = [];
 		while ( $row = $result->fetchArray(SQLITE3_ASSOC) ) {
-			$returnArray[$row["pogoname"]] = $row["totalscore"];
+			$returnArray[$row["pogoname"]] = $row["score"];
 		}
 		return $returnArray;
 			

@@ -129,6 +129,7 @@ abstract class PoGoDB {
 			return "Sorry there are no scores for this month yet";
 		}
 		foreach( $results as $user => $score ) {
+			if( is_null($score) ) continue;
 			if($user == $this->db_get_pogoName()) {
 				$yourrank = $iteration;
 			}
@@ -159,6 +160,7 @@ abstract class PoGoDB {
 			return "Sorry there are no scores for last month";
 		}
 		foreach( $results as $user => $score ) {
+			if( is_null($score) ) continue;
 			if($user == $this->db_get_pogoName()) {
 				$yourrank = $iteration;
 			}

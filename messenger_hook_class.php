@@ -279,7 +279,7 @@ class messenger_hook_class {
 					$buttons = $this->message_strings->score_confirm_buttons();
 					$this->sendMessage_response($senderId, $message, $buttons);
 				} catch (Exception $e) {
-					$message = $this->message_strings->score_error($e->getMessage());
+					$message = $e->getMessage();
 					$this->sendMessage_response($senderId, $message);
 					$db->db_set_expecting_response_from_user("");
 					$this->handleMessage($senderId, "switchboard");
@@ -298,7 +298,7 @@ class messenger_hook_class {
 						$this->sendMessage_response($senderId, $message);
 					}
 				} catch (Exception $e) {
-					$message = $this->message_strings->score_error($e->getMessage());
+					$message = $e->getMessage();
 					$this->sendMessage_response($senderId, $message);
 				}
 				$db->db_set_expecting_response_from_user("");
