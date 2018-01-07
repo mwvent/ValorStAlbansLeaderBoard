@@ -76,6 +76,12 @@ abstract class PoGoDB {
 		$minsDiff += $interval->i;
 		// you can have 20 mons in a gym so max of 20 mins per minute
 		$maxNewPoints = round(($minsDiff * 20) / 60);
+		// after writing the last line I have discovered that
+		// the medal only updates when your defender leaves the gym
+		// so that logic will not work - you could gain many hours
+		// more in an hour - just try an return a semi sensible max value
+		// for now
+		$maxNewPoints = $maxNewPoints * 10;
 		return $maxNewPoints + $priorScoreValue;
 	}
 	
@@ -133,6 +139,8 @@ abstract class PoGoDB {
 		}
 		if( $yourrank > -1 ) {
 			$resultTxt .= "Your rank is $yourrank";
+		} else {
+			$resultTxt .= "Your score will not be calulated until you have made two submissions";
 		}
 		return $resultTxt;
 	}
@@ -165,8 +173,8 @@ abstract class PoGoDB {
 		return $resultTxt;
 	}
 	
-	// user has submitted a new score
-	public function action_newScore($newScore) {
+	// throws exeption or returns true
+	public function action_validate_potentialNewScore($newScore) {
 		$newScore = str_replace(',', '', $newScore);
 		$this->expect_loggedIn();
 		// re-validate what the UI should do, the UI is in userspace
@@ -199,20 +207,27 @@ abstract class PoGoDB {
 				throw new Exception( $errMsg );
 			}
 			if( $newScore > $highestPoss ) {
-				$errMsg = "Impossibly low score. " .
-						  "The max based on your previous score of $lowestPoss " .
-						  "is $highestPoss";
+				$errMsg = "Score seems too high " .
+						  "based on your previous score of $lowestPoss.".
+						  "please check again and contact Matthew Watts if it is correct";
 				throw new Exception( $errMsg );
 			}
 		}
 		
 		$newScore = (int)$newScore;
 		$thisTimeStamp = $_SERVER['REQUEST_TIME'];
-			
+	}
+	
+	// user has submitted a new score
+	public function action_newScore($newScore) {
+		$this->expect_loggedIn();
+		$newScore = str_replace(',', '', $newScore);
+		$this->action_validate_potentialNewScore($newScore);
+		$newScore = (int)$newScore;
+		$thisTimeStamp = $_SERVER['REQUEST_TIME'];
+		
 		$this->db_beginTransaction();
-		
 		$this->db_add_NewScore($thisTimeStamp, $newScore);
-		
 		$this->db_completeTransaction();
 	}
 	

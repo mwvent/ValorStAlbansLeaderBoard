@@ -5,7 +5,7 @@ class messenger_hook_class_message_strings {
 	function switchboard($trainerName) {
 		return "Hi " . $trainerName . PHP_EOL .
 			   "I have several options for you" . PHP_EOL .
-			   "1 ) Submit a badge score " . PHP_EOL .
+			   "1 ) Submit a medal score " . PHP_EOL .
 			   "2 ) View this months in-progress leaderboard" . PHP_EOL .
 			   "3 ) See last months scores " . PHP_EOL .
 			   "4 ) Change your trainer name " . PHP_EOL .
@@ -88,7 +88,19 @@ class messenger_hook_class_message_strings {
 	}
 	
 	function submit_score_buttons($lastScore) {
-		return ($lastScore>-1) ? [ $lastScore ] : [];
+		return ( $lastScore > -1 ) ? [ $lastScore ] : [];
+	}
+	
+	function score_confirm($lastScore) {
+		return "So you would like to submit a score of $lastScore?";
+	}
+	
+	function score_confirm_buttons() {
+		return [ "Yes" , "No" ];
+	}
+	
+	function score_sub_cancelled() {
+		return "Ok I will not save that score.";
 	}
 	
 	function score_error($errText) {
@@ -97,7 +109,10 @@ class messenger_hook_class_message_strings {
 			   "Please try again later.";
 	}
 	
-	function score_sucess($hoursDefended, $maxPossibleHoursDefended) {
+	function score_sucess($hoursDefended = null, $maxPossibleHoursDefended = null) {
+		if( is_null( $hoursDefended ) || is_null( $maxPossibleHoursDefended ) ) {
+			return "Thanks for submitting. Keep taking those gyms :-)";
+		}
 		$percentageOfPossibleMax = ($hoursDefended / $maxPossibleHoursDefended);
 		if( $percentageOfPossibleMax_as1to100 > 90 ) {
 			return "Wow what a score! :-O Turning the town red. Well done!";
@@ -244,23 +259,25 @@ class messenger_hook_class {
 				$messageText = str_replace(',', '', $messageText);
 				$messageText = preg_replace('/[^0-9]/s', '', $messageText);
 				if( trim($messageText) == "" ) {
-					$message = $this->message_strings->submit_score();
+					$message = "Sorry I did not catch that please enter a number.";
 					$this->sendMessage_response($senderId, $message);
 					$db->db_set_expecting_response_from_user("submitscore");
+					return;
 				}
 				$firsttext=explode(" ", trim($messageText))[0];
 				if( ! is_numeric( $firsttext ) ) {
-					$message = $this->message_strings->submit_score();
+					$message = "Sorry I did not catch that please enter a number.";
 					$this->sendMessage_response($senderId, $message);
 					$db->db_set_expecting_response_from_user("submitscore");
 					return ;
 				}
 				try {
-					$db->action_newScore($firsttext);
-					$message = "Thanks your score has been recorded";
-					$this->sendMessage_response($senderId, $message);
-					$db->db_set_expecting_response_from_user("");
-					$this->handleMessage($senderId, "switchboard");
+					$db->action_validate_potentialNewScore($firsttext);
+					$db->db_set_expecting_response_from_user("scoresubmission_confirm");
+					$db->db_set_pending_response_from_user($firsttext);
+					$message = $this->message_strings->score_confirm($firsttext);
+					$buttons = $this->message_strings->score_confirm_buttons();
+					$this->sendMessage_response($senderId, $message, $buttons);
 				} catch (Exception $e) {
 					$message = $this->message_strings->score_error($e->getMessage());
 					$this->sendMessage_response($senderId, $message);
@@ -268,6 +285,24 @@ class messenger_hook_class {
 					$this->handleMessage($senderId, "switchboard");
 					return ;
 				}
+				break;
+			case "scoresubmission_confirm" :
+				try {
+					$newScore = $db->db_get_pending_response_from_user();
+					if( trim(strtolower($messageText)) == "yes" ) {
+						$db->action_newScore($newScore);
+						$message = $this->message_strings->score_sucess();
+						$this->sendMessage_response($senderId, $message);
+					} else {
+						$message = $this->message_strings->score_sub_cancelled();
+						$this->sendMessage_response($senderId, $message);
+					}
+				} catch (Exception $e) {
+					$message = $this->message_strings->score_error($e->getMessage());
+					$this->sendMessage_response($senderId, $message);
+				}
+				$db->db_set_expecting_response_from_user("");
+				$this->handleMessage($senderId, "switchboard");
 				break;
 		}
 		
