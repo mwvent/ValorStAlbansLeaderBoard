@@ -17,29 +17,6 @@ class PoGoDB_SQLite3 extends PoGoDB {
 		$result = $statement->execute();
 	}
 	
-	protected function db_purge_dailyScoresForParentTimeStamp($timestamp) {
-		$sql = "DELETE FROM scorelog_days
-				WHERE user_uuid = :uuid AND parent_entry_timestamp = :timestamp";
-		$statement = $this->db_connection->prepare($sql);		
-		$statement->bindValue(':uuid', $this->current_user_facebook_uuid);
-		$statement->bindValue(':timestamp', $timestamp);
-		$result = $statement->execute();
-	}
-	
-	protected function db_add_dailyScore($parentTimestamp, $day, $score) {
-		$sql = "INSERT INTO scorelog_days
-				(user_uuid, localised_day_yyyymmdd, parent_entry_timestamp, value) 
-				VALUES
-				(:uuid, :day, :parentTS, :score) ;";
-		$statement = $this->db_connection->prepare($sql);
-		$statement->bindValue(':uuid', $this->current_user_facebook_uuid);
-		$statement->bindValue(':day', $day);
-		$statement->bindValue(':parentTS', $parentTimestamp);
-		$statement->bindValue(':score', $score);
-		$result = $statement->execute();
-		
-	}
-	
 	protected function db_get_TimeStampsAndScoresByNewestFirst($from = -1, $limit = -1) {
 		$sql_from = ( $from !=-1 ) ? "AND recordedTime >= '" . $from . "'" : "";
 		$sql_limit = ( $limit !=-1 ) ? "LIMIT $limit" : "";
@@ -60,27 +37,45 @@ class PoGoDB_SQLite3 extends PoGoDB {
 		return $returnArray;
 	}
 	
-	// SELECT user_uuid, localised_day_yyyymmdd, total(value) 
-	// FROM scorelog_days GROUP BY user_uuid, localised_day_yyyymmdd
-	
-	protected function getDailyScoresForDateRange($startYYYYMMDD, $endYYYYMMDD) {
-		$sql = "SELECT pogoname, total(value) AS 'score'
-				FROM scorelog_days 
-				INNER JOIN users 
-					ON users.uuid = scorelog_days.user_uuid 
-				WHERE scorelog_days.localised_day_yyyymmdd >= :startD
-				  AND scorelog_days.localised_day_yyyymmdd <= :endD
-				GROUP BY user_uuid
-				ORDER BY total(value) ;";
+	protected function getTotalScoresForDateRange($startunixts, $endunixts) {
+		$sql = "
+			SELECT
+				users.pogoname AS pogoname,
+				sum(scorelog_entries.recordedValue - scorelog_entriesprev.oldvalue) AS totalscore
+			FROM 
+				scorelog_entries
+			INNER JOIN users 
+				ON users.uuid = user_uuid 
+			LEFT JOIN
+				(
+					SELECT
+						user_uuid AS olduuid,
+						recordedTime AS oldday,
+						sum(recordedValue) AS oldvalue
+					FROM scorelog_entries
+					GROUP BY
+						olduuid,
+						oldday
+					ORDER BY oldday DESC
+				) AS scorelog_entriesprev ON
+					scorelog_entriesprev.olduuid = scorelog_entries.user_uuid
+					AND scorelog_entriesprev.oldday < scorelog_entries.recordedTime
+			WHERE
+				scorelog_entriesprev.oldvalue IS NOT NULL
+				AND scorelog_entries.recordedTime >= :startunixts
+				AND scorelog_entries.recordedTime <= :endunixts
+			GROUP BY pogoname
+			ORDER BY totalscore DESC; ";
 		$statement = $this->db_connection->prepare($sql);
-		$statement->bindValue(':startD', $startYYYYMMDD);
-		$statement->bindValue(':endD', $endYYYYMMDD);
+		$statement->bindValue(':startunixts', $startunixts);
+		$statement->bindValue(':endunixts', $endunixts);
 		$result = $statement->execute();
 		$returnArray = [];
 		while ( $row = $result->fetchArray(SQLITE3_ASSOC) ) {
-			$returnArray[$row["pogoname"]] = $row["score"];
+			$returnArray[$row["pogoname"]] = $row["totalscore"];
 		}
 		return $returnArray;
+			
 	}
 	
 	protected function db_connect() {
@@ -104,16 +99,6 @@ class PoGoDB_SQLite3 extends PoGoDB {
 				(	user_uuid text,
 					recordedTime TIMESTAMP,
 					recordedValue INTEGER
-				);
-		";
-		
-		// score log secondary
-		$dbSetupQueries[] = "
-			CREATE TABLE IF NOT EXISTS scorelog_days
-				(	user_uuid text,
-					localised_day_yyyymmdd INTEGER,
-					parent_entry_timestamp TIMESTAMP,
-					value NUMERIC
 				);
 		";
 		

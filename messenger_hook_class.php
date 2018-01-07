@@ -14,7 +14,12 @@ class messenger_hook_class_message_strings {
 	}
 	
 	function switchboard_buttons() {
-		return [ "1", "2", "3", "4", "5" ];
+		return [ 1 => "1 Submit", 
+			     2 => "2 Current",
+			     3 => "3 Prev",
+			     4 => "4 Name",
+			     5 => "5 Tog"
+			    ];
 	}
 	
 	function welcome_name_not_known() {
@@ -75,8 +80,15 @@ class messenger_hook_class_message_strings {
 			   "between submissions.";
 	}
 	
-	function submit_score() {
-		return "Please enter the total hours on your GYM LEADER medal.";
+	function submit_score($lastScore) {
+		$r = "Please enter the total hours on your GYM LEADER medal.";
+		$p = "If it is still $lastScore just tap the button below to record this.";
+		$r .= ($lastScore>-1) ? PHP_EOL . $p : "";
+		return $r;
+	}
+	
+	function submit_score_buttons($lastScore) {
+		return ($lastScore>-1) ? [ $lastScore ] : [];
 	}
 	
 	function score_error($errText) {
@@ -138,31 +150,41 @@ class messenger_hook_class {
 					// $this->sendMessage_response($senderId, "hi");
 					// $db->db_set_expecting_response_from_user("");
 					// TODO woah this is getting very nested
-					switch( trim($messageText) ) {
+					switch( strtolower(trim($messageText)) ) {
 						case "1" :
+						case strtolower($this->message_strings->switchboard_buttons()[1]) :
 							if( ! $db->ui_userHasScoreRecorded() ) {
+								$lastscore = -1;
 								$message = $this->message_strings->sumbit_first_score();
 								$this->sendMessage_response($senderId, $message);
+							} else {
+								$lastscore = $db->ui_previousScore();
 							}
-							$message = $this->message_strings->submit_score();
-							$this->sendMessage_response($senderId, $message);
+							$message = $this->message_strings->submit_score($lastscore);
+							$buttons = $this->message_strings->submit_score_buttons($lastscore);
+							$this->sendMessage_response($senderId, $message, $buttons);
 							$db->db_set_expecting_response_from_user("submitscore");
 							break;
 						case "2" :
+						case strtolower($this->message_strings->switchboard_buttons()[2]) :
 							$message = $db->ui_thismonthscores();
 							$this->sendMessage_response($senderId, $message);
 							$this->handleMessage($senderId, "switchboard");
 							break;
 						case "3" :
-							$message = "Sorry this is not online yet - we need a bit more data";
+						case strtolower($this->message_strings->switchboard_buttons()[3]) :
+							$message = $db->ui_lastmonthscores();
 							$this->sendMessage_response($senderId, $message);
+							$this->handleMessage($senderId, "switchboard");
 							break;
 						case "4" : 
+						case strtolower($this->message_strings->switchboard_buttons()[4]) :
 							$message = $this->message_strings->user_requested_name_change();
 							$this->sendMessage_response($senderId, $message);
 							$db->db_set_expecting_response_from_user("setname");
 							break;
 						case "5" :
+						case strtolower($this->message_strings->switchboard_buttons()[5]) :
 							$state = $db->db_get_optout_messages();
 							$newState = ! $state;
 							$db->db_set_optout_messages($newState);
@@ -220,6 +242,7 @@ class messenger_hook_class {
 				break;
 			case "submitscore" :
 				$messageText = str_replace(',', '', $messageText);
+				$messageText = preg_replace('/[^0-9]/s', '', $messageText);
 				if( trim($messageText) == "" ) {
 					$message = $this->message_strings->submit_score();
 					$this->sendMessage_response($senderId, $message);
