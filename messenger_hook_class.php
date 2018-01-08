@@ -196,206 +196,259 @@ class messenger_hook_class {
 	public function isAValidPogoName($name) {
 		return ( str_replace( " ", "", $name ) == $name);
 	}
+	
+	public function handleMessage_newuser($senderId, $messageText) {
+		$message = $this->message_strings->welcome_name_not_known();
+		$this->sendMessage_response($senderId, $message);
+		$db->db_set_expecting_response_from_user("setname");
+	}
+	
+	public function handleMessage_switchboard_1_submitscore($db, $senderId, $messageText) {
+		if( ! $db->ui_userHasScoreRecorded() ) {
+			$lastscore = -1;
+			$message = $this->message_strings->sumbit_first_score();
+			$this->sendMessage_response($senderId, $message);
+		} else {
+			$lastscore = $db->ui_previousScore();
+		}
+		$message = $this->message_strings->submit_score($lastscore);
+		$buttons = $this->message_strings->submit_score_buttons($lastscore);
+		$this->sendMessage_response($senderId, $message, $buttons);
+		$db->db_set_expecting_response_from_user("submitscore");
+	}
+	
+	public function handleMessage_switchboard_2_showscores($db, $senderId, $messageText) {
+		$message = $db->ui_thismonthscores();
+		$this->sendMessage_response($senderId, $message);
+		$this->handleMessage($senderId, "switchboard");
+	}
+	
+	public function handleMessage_switchboard_3_showlastmscores($db, $senderId, $messageText) {
+		$message = $db->ui_lastmonthscores();
+		$this->sendMessage_response($senderId, $message);
+		$this->handleMessage($senderId, "switchboard");
+	}
+	
+	public function handleMessage_switchboard_4_namechange($db, $senderId, $messageText) {
+		$message = $this->message_strings->user_requested_name_change();
+		$this->sendMessage_response($senderId, $message);
+		$db->db_set_expecting_response_from_user("setname");
+	}
+	
+	public function handleMessage_switchboard_5_toggleautomsg($db, $senderId, $messageText) {
+		$state = $db->db_get_optout_messages();
+		$newState = ! $state;
+		$db->db_set_optout_messages($newState);
+		if( ! $newState ) {
+			$message = $this->message_strings->optedOut();
+		} else {
+			$message = $this->message_strings->optedIn();
+		}
+		$this->sendMessage_response($senderId, $message);
+		$this->handleMessage($senderId, "switchboard");
+	}
+	
+	public function handleMessage_switchboard_6_undo($db, $senderId, $messageText) {
+		$lastScoreInfo = $db->ui_lastscoreinfo();
+		if( is_null( $lastScoreInfo["newestScore"] ) ) {
+			$message = "You have no scores submitted that can be undone!";
+			$this->sendMessage_response($senderId, $message);
+			$this->handleMessage($senderId, "switchboard");
+			return;
+		}
+		$message = $this->message_strings->confirmScoreRemoval(
+			$lastScoreInfo["newestScore"]["scorevalue"],
+			$lastScoreInfo["newestScore"]["humantime"]
+		);
+		$buttons = $this->message_strings->yesno_buttons();
+		$this->sendMessage_response($senderId, $message, $buttons);
+		$db->db_set_expecting_response_from_user("confirmscoreremoval");
+	}
+	
+	public function handleMessage_switchboard_show($db, $senderId, $messageText) {
+		$username = $db->db_get_pogoName();
+		$message = $this->message_strings->switchboard_less($username);
+		$buttons = $this->message_strings->switchboard_buttons_less();
+		$this->sendMessage_response($senderId, $message, $buttons);
+		$db->db_set_expecting_response_from_user("");
+	}
+	
+	public function handleMessage_switchboard_showMore($db, $senderId, $messageText) {
+		$username = $db->db_get_pogoName();
+		$message = $this->message_strings->switchboard_more($username);
+		$buttons = $this->message_strings->switchboard_buttons();
+		$this->sendMessage_response($senderId, $message, $buttons);
+		$db->db_set_expecting_response_from_user("");
+	}
+	
+	public function handleMessage_switchboard_option_given($db, $senderId, $messageText) {
+		switch( strtolower(trim($messageText)) ) {
+			case "1" :
+			case strtolower($this->message_strings->switchboard_buttons()[1]) :
+				$this->handleMessage_switchboard_1_submitscore($db, $senderId, $messageText);
+				break;
+			case "2" :
+			case strtolower($this->message_strings->switchboard_buttons()[2]) :
+				$this->handleMessage_switchboard_2_showscores($db, $senderId, $messageText);
+				break;
+			case "3" :
+			case strtolower($this->message_strings->switchboard_buttons()[3]) :
+				$this->handleMessage_switchboard_3_showlastmscores($db, $senderId, $messageText);
+				break;
+			case "more" :
+				$this->handleMessage_switchboard_showMore($db, $senderId, $messageText);
+				break;
+			case "4" : 
+			case strtolower($this->message_strings->switchboard_buttons()[4]) :
+				$this->handleMessage_switchboard_4_namechange($db, $senderId, $messageText);
+				break;
+			case "5" :
+			case strtolower($this->message_strings->switchboard_buttons()[5]) :
+				$this->handleMessage_switchboard_5_toggleautomsg($db, $senderId, $messageText);
+				break;
+			case "6" :
+			case strtolower($this->message_strings->switchboard_buttons()[6]) :
+				$this->handleMessage_switchboard_6_undo($db, $senderId, $messageText);
+				break;
+			default :
+				$this->handleMessage_switchboard_show($db, $senderId, $messageText);
+				break;
+		}
+	}
+
+	public function handleResponseTo_setname($db, $senderId, $messageText) {
+		if( ! $this->isAValidPogoName($messageText) ) {
+			$message = $this->message_strings->nameInvalid($newName);
+			$this->sendMessage_response($senderId, $message);
+			return;
+		}
+		$message = $this->message_strings->set_name_response($messageText);
+		$buttons = $this->message_strings->set_name_response_buttons();
+		$this->sendMessage_response($senderId, $message, $buttons);
+		$db->db_set_expecting_response_from_user("setname_confirm");
+		$db->db_set_pending_response_from_user($messageText);
+	}
+	
+	public function handleResponseTo_setname_confirm($db, $senderId, $messageText) {
+		$newName = $db->db_get_pending_response_from_user();
+		if( trim(strtolower($messageText)) != "yes" ) {
+			if( $db->db_get_pogoName() == "" ) {
+				$message = $this->message_strings->welcome_name_not_known();
+				$db->db_set_expecting_response_from_user("setname");
+				$this->sendMessage_response($senderId, $message);
+			} else {
+				$currentName = $db->db_get_pogoName();
+				$message = $this->message_strings->cancelNameSet($currentName);
+				$this->sendMessage_response($senderId, $message);
+				$this->handleMessage_switchboard_show($db, $senderId, $messageText);
+			}
+			return;
+		} else {
+			$db->db_set_pogoName($newName);
+			$message = $this->message_strings->nameSetComplete($newName);
+			$this->sendMessage_response($senderId, $message);
+			$this->handleMessage_switchboard_show($db, $senderId, $messageText);
+		}
+	}
+	
+	public function handleResponseTo_submitscore($db, $senderId, $messageText) {
+		$messageText = str_replace(',', '', $messageText);
+		$messageText = preg_replace('/[^0-9]/s', '', $messageText);
+		if( trim($messageText) == "" ) {
+			$message = "Sorry I did not catch that please enter a number.";
+			$this->sendMessage_response($senderId, $message);
+			$db->db_set_expecting_response_from_user("submitscore");
+			return;
+		}
+		$firsttext=explode(" ", trim($messageText))[0];
+		if( ! is_numeric( $firsttext ) ) {
+			$message = "Sorry I did not catch that please enter a number.";
+			$this->sendMessage_response($senderId, $message);
+			$db->db_set_expecting_response_from_user("submitscore");
+			return ;
+		}
+		try {
+			$db->action_validate_potentialNewScore($firsttext);
+			$db->db_set_expecting_response_from_user("scoresubmission_confirm");
+			$db->db_set_pending_response_from_user($firsttext);
+			$message = $this->message_strings->score_confirm($firsttext);
+			$buttons = $this->message_strings->score_confirm_buttons();
+			$this->sendMessage_response($senderId, $message, $buttons);
+		} catch (Exception $e) {
+			$message = $e->getMessage();
+			$this->sendMessage_response($senderId, $message);
+			$this->handleMessage_switchboard_show($db, $senderId, $messageText);
+			return ;
+		}
+	}
+	
+	public function handleResponseTo_scoresubmission_confirm($db, $senderId, $messageText) {
+		try {
+			$newScore = $db->db_get_pending_response_from_user();
+			if( trim(strtolower($messageText)) == "yes" ) {
+				$db->action_newScore($newScore);
+				$scoreInfo = $db->ui_lastscoreinfo();
+				$message = $this->message_strings->score_sucess($scoreInfo);
+				$this->sendMessage_response($senderId, $message);
+			} else {
+				$message = $this->message_strings->score_sub_cancelled();
+				$this->sendMessage_response($senderId, $message);
+			}
+		} catch (Exception $e) {
+			$message = $e->getMessage();
+			$this->sendMessage_response($senderId, $message);
+		}
+		$this->handleMessage_switchboard_show($db, $senderId, $messageText);
+	}
+	
+	public function handleResponseTo_confirmscoreremoval($db, $senderId, $messageText) {
+		try {
+			if( trim(strtolower($messageText)) == "yes" ) {
+				$db->action_undoPrevScore();
+				$message = $this->message_strings->completedScoreRemoval();
+				$this->sendMessage_response($senderId, $message);
+			} else {
+				$message = $this->message_strings->cancelScoreRemoval();
+				$this->sendMessage_response($senderId, $message);
+			}
+		} catch (Exception $e) {
+			$message = $e->getMessage();
+			$this->sendMessage_response($senderId, $message);
+		}
+		$this->handleMessage_switchboard_show($db, $senderId, $messageText);
+	}
 
 	public function handleMessage($senderId, $messageText) {
 		$db = new PoGoDB_SQLite3($senderId);
+		$expectingResponse = $db->db_get_expecting_response_from_user();
 		
-		switch( $db->db_get_expecting_response_from_user() ) {
-			case "" :
-				if( $db->db_get_pogoName() == "" ) {
-					$message = $this->message_strings->welcome_name_not_known();
-					$this->sendMessage_response($senderId, $message);
-					$db->db_set_expecting_response_from_user("setname");
-				} else {
-					// $this->sendMessage_response($senderId, "hi");
-					// $db->db_set_expecting_response_from_user("");
-					// TODO woah this is getting very nested
-					switch( strtolower(trim($messageText)) ) {
-						case "1" :
-						case strtolower($this->message_strings->switchboard_buttons()[1]) :
-							if( ! $db->ui_userHasScoreRecorded() ) {
-								$lastscore = -1;
-								$message = $this->message_strings->sumbit_first_score();
-								$this->sendMessage_response($senderId, $message);
-							} else {
-								$lastscore = $db->ui_previousScore();
-							}
-							$message = $this->message_strings->submit_score($lastscore);
-							$buttons = $this->message_strings->submit_score_buttons($lastscore);
-							$this->sendMessage_response($senderId, $message, $buttons);
-							$db->db_set_expecting_response_from_user("submitscore");
-							break;
-						case "2" :
-						case strtolower($this->message_strings->switchboard_buttons()[2]) :
-							$message = $db->ui_thismonthscores();
-							$this->sendMessage_response($senderId, $message);
-							$this->handleMessage($senderId, "switchboard");
-							break;
-						case "3" :
-						case strtolower($this->message_strings->switchboard_buttons()[3]) :
-							$message = $db->ui_lastmonthscores();
-							$this->sendMessage_response($senderId, $message);
-							$this->handleMessage($senderId, "switchboard");
-							break;
-						case "more" :
-							$username = $db->db_get_pogoName();
-							$message = $this->message_strings->switchboard_more($username);
-							$buttons = $this->message_strings->switchboard_buttons();
-							$this->sendMessage_response($senderId, $message, $buttons);
-							break;
-						case "4" : 
-						case strtolower($this->message_strings->switchboard_buttons()[4]) :
-							$message = $this->message_strings->user_requested_name_change();
-							$this->sendMessage_response($senderId, $message);
-							$db->db_set_expecting_response_from_user("setname");
-							break;
-						case "5" :
-						case strtolower($this->message_strings->switchboard_buttons()[5]) :
-							$state = $db->db_get_optout_messages();
-							$newState = ! $state;
-							$db->db_set_optout_messages($newState);
-							if( ! $newState ) {
-								$message = $this->message_strings->optedOut();
-							} else {
-								$message = $this->message_strings->optedIn();
-							}
-							$this->sendMessage_response($senderId, $message);
-							$this->handleMessage($senderId, "switchboard");
-							break;
-						case "6" :
-						case strtolower($this->message_strings->switchboard_buttons()[6]) :
-							$lastScoreInfo = $db->ui_lastscoreinfo();
-							if( is_null( $lastScoreInfo["newestScore"] ) ) {
-								$message = "You have no scores submitted that can be undone!";
-								$this->sendMessage_response($senderId, $message);
-								$this->handleMessage($senderId, "switchboard");
-								return;
-							}
-							$message = $this->message_strings->confirmScoreRemoval(
-								$lastScoreInfo["newestScore"]["scorevalue"],
-								$lastScoreInfo["newestScore"]["humantime"]
-							);
-							$buttons = $this->message_strings->yesno_buttons();
-							$this->sendMessage_response($senderId, $message, $buttons);
-							$db->db_set_expecting_response_from_user("confirmscoreremoval");
-							break;
-						default :
-							$username = $db->db_get_pogoName();
-							$message = $this->message_strings->switchboard_less($username);
-							$buttons = $this->message_strings->switchboard_buttons_less();
-							$this->sendMessage_response($senderId, $message, $buttons);
-							break;
-					}
-				}
-				break;
-			case "setname" :
-				if( ! $this->isAValidPogoName($messageText) ) {
-					$message = $this->message_strings->nameInvalid($newName);
-					$this->sendMessage_response($senderId, $message);
-					return;
-				}
-				$message = $this->message_strings->set_name_response($messageText);
-				$buttons = $this->message_strings->set_name_response_buttons();
-				$this->sendMessage_response($senderId, $message, $buttons);
-				$db->db_set_expecting_response_from_user("setname_confirm");
-				$db->db_set_pending_response_from_user($messageText);
-				break;
-			case "setname_confirm" :
-				$newName = $db->db_get_pending_response_from_user();
-				if( trim(strtolower($messageText)) != "yes" ) {
-					if( $db->db_get_pogoName() == "" ) {
-						$message = $this->message_strings->welcome_name_not_known();
-						$db->db_set_expecting_response_from_user("setname");
-						$this->sendMessage_response($senderId, $message);
-					} else {
-						$currentName = $db->db_get_pogoName();
-						$message = $this->message_strings->cancelNameSet($currentName);
-						$this->sendMessage_response($senderId, $message);
-						$db->db_set_expecting_response_from_user("");
-						$this->handleMessage($senderId, "switchboard");
-					}
-					return;
-				} else {
-					$db->db_set_pogoName($newName);
-					$db->db_set_expecting_response_from_user("");
-					$message = $this->message_strings->nameSetComplete($newName);
-					$this->sendMessage_response($senderId, $message);
-					$this->handleMessage($senderId, "switchboard");
-				}
-				break;
-			case "submitscore" :
-				$messageText = str_replace(',', '', $messageText);
-				$messageText = preg_replace('/[^0-9]/s', '', $messageText);
-				if( trim($messageText) == "" ) {
-					$message = "Sorry I did not catch that please enter a number.";
-					$this->sendMessage_response($senderId, $message);
-					$db->db_set_expecting_response_from_user("submitscore");
-					return;
-				}
-				$firsttext=explode(" ", trim($messageText))[0];
-				if( ! is_numeric( $firsttext ) ) {
-					$message = "Sorry I did not catch that please enter a number.";
-					$this->sendMessage_response($senderId, $message);
-					$db->db_set_expecting_response_from_user("submitscore");
-					return ;
-				}
-				try {
-					$db->action_validate_potentialNewScore($firsttext);
-					$db->db_set_expecting_response_from_user("scoresubmission_confirm");
-					$db->db_set_pending_response_from_user($firsttext);
-					$message = $this->message_strings->score_confirm($firsttext);
-					$buttons = $this->message_strings->score_confirm_buttons();
-					$this->sendMessage_response($senderId, $message, $buttons);
-				} catch (Exception $e) {
-					$message = $e->getMessage();
-					$this->sendMessage_response($senderId, $message);
-					$db->db_set_expecting_response_from_user("");
-					$this->handleMessage($senderId, "switchboard");
-					return ;
-				}
-				break;
-			case "scoresubmission_confirm" :
-				try {
-					$newScore = $db->db_get_pending_response_from_user();
-					if( trim(strtolower($messageText)) == "yes" ) {
-						$db->action_newScore($newScore);
-						$scoreInfo = $db->ui_lastscoreinfo();
-						$message = $this->message_strings->score_sucess($scoreInfo);
-						$this->sendMessage_response($senderId, $message);
-					} else {
-						$message = $this->message_strings->score_sub_cancelled();
-						$this->sendMessage_response($senderId, $message);
-					}
-				} catch (Exception $e) {
-					$message = $e->getMessage();
-					$this->sendMessage_response($senderId, $message);
-				}
-				$db->db_set_expecting_response_from_user("");
-				$this->handleMessage($senderId, "switchboard");
-				break;
-			case "confirmscoreremoval" :
-				try {
-					if( trim(strtolower($messageText)) == "yes" ) {
-						$db->action_undoPrevScore();
-						$message = $this->message_strings->completedScoreRemoval();
-						$this->sendMessage_response($senderId, $message);
-					} else {
-						$message = $this->message_strings->cancelScoreRemoval();
-						$this->sendMessage_response($senderId, $message);
-					}
-				} catch (Exception $e) {
-					$message = $e->getMessage();
-					$this->sendMessage_response($senderId, $message);
-				}
-				$db->db_set_expecting_response_from_user("");
-				$this->handleMessage($senderId, "switchboard");
-				break;
-			default :
-				$db->db_set_expecting_response_from_user("");
-				$this->handleMessage($senderId, "switchboard");
-				break;
+		// a new user has spoken to bot
+		if( $expectingResponse == "" and $db->db_get_pogoName() == "" ) {
+			$this->handleMessage_newuser($senderId, $messageText);
+			return;
 		}
 		
+		// expecting a response - call the correct handler from here
+		switch( $expectingResponse ) {
+			case "" : // no response expected - send to switchboard handler
+				$this->handleMessage_switchboard_option_given($db, $senderId, $messageText);
+				break;
+			case "setname" :
+				$this->handleResponseTo_setname($db, $senderId, $messageText);
+				break;
+			case "setname_confirm" :
+				$this->handleResponseTo_setname_confirm($db, $senderId, $messageText);
+				break;
+			case "submitscore" :
+				$this->handleResponseTo_submitscore($db, $senderId, $messageText);
+				break;
+			case "scoresubmission_confirm" :
+				$this->handleResponseTo_scoresubmission_confirm($db, $senderId, $messageText);
+				break;
+			case "confirmscoreremoval" :
+				$this->handleResponseTo_confirmscoreremoval($db, $senderId, $messageText);
+				break;
+		}	
 	}
 	
 	public function sendMessage_response($recipientID, $messageText, $buttons = []) {
