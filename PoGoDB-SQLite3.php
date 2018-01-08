@@ -4,6 +4,16 @@ require_once("PoGoDB.php");
 class PoGoDB_SQLite3 extends PoGoDB {
 	protected $db_connection;
 	
+	protected function db_purgeLatestScoreForUser() {
+		$sql = "DELETE FROM scorelog_entries 
+				WHERE user_uuid = :uuid
+				ORDER BY recordedTime DESC
+				LIMIT 1;";
+		$statement = $this->db_connection->prepare($sql);
+		$statement->bindValue(':uuid', $this->current_user_facebook_uuid);
+		$result = $statement->execute();
+	}
+	
 	protected function db_add_NewScore($thisTimeStamp, $newScore) {
 		$sql = "INSERT OR IGNORE 
 				    INTO scorelog_entries
@@ -211,6 +221,8 @@ class PoGoDB_SQLite3 extends PoGoDB {
 		$result = $statement->execute();
 		if ( $row = $result->fetchArray(SQLITE3_ASSOC) ) {
 			if ( $row["opt_out_messages"] == "" ) {
+				return false;
+			} elseif( is_null( $row["opt_out_messages"] ) ) {
 				return false;
 			} else {
 				return $row["opt_out_messages"] == "Yes" ? true : false;

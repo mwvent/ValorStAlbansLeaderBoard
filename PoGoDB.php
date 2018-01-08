@@ -76,12 +76,8 @@ abstract class PoGoDB {
 		$minsDiff += $interval->i;
 		// you can have 20 mons in a gym so max of 20 mins per minute
 		$maxNewPoints = round(($minsDiff * 20) / 60);
-		// after writing the last line I have discovered that
-		// the medal only updates when your defender leaves the gym
-		// so that logic will not work - you could gain many hours
-		// more in an hour - just try an return a semi sensible max value
-		// for now
-		$maxNewPoints = $maxNewPoints * 10;
+
+		$maxNewPoints = $maxNewPoints;
 		return $maxNewPoints + $priorScoreValue;
 	}
 	
@@ -97,22 +93,74 @@ abstract class PoGoDB {
 	
 	// returns an array with various indicators to how well
 	// the performance was on the last submission
+	// newestScore - array or null if no scores
+	// |-timestamp
+	// | humantime
+	// | scorevalue
+	// | ageDays
+	// priorScore - array or null if no prior
+	// |-timestamp
+	// | humantime
+	// | scoreValue
+	// | ageDays
+	// comparision - array or no exist if no prior
+	// |- performance - a number from 0-100 representing how much of the maximum was acheived
+	//    diffInMins
+	//    maxNewPoints
+	//    acheivedPoints
 	public function ui_lastscoreinfo() {
 		$this->expect_loggedIn();
-		$lastScore = $this->db_get_TimeStampsAndScoresByNewestFirst(0,1);
-		$priorScoreTimestamp = array_keys($lastScore)[0];
-		$priorScoreValue = $lastScore[ $priorScoreTimestamp ];
-		$newerTime = new DateTime('@' .  $_SERVER['REQUEST_TIME']);
-		$newerTime->setTimezone(new DateTimeZone('Europe/London'));
-		$priorTime = new DateTime('@' . $priorScoreTimestamp);
-		$priorTime->setTimezone(new DateTimeZone('Europe/London'));
-		$interval = $priorTime->diff($newerTime);
+		$returnArray = [];
+		$lastScores = $this->db_get_TimeStampsAndScoresByNewestFirst(0,2);
+		
+		$curentTime = $newerTime = new DateTime('@' .  $_SERVER['REQUEST_TIME']);
+		
+		if( empty($lastScores) ) {
+			return [ "newestScore" => null, "priorScore" => null ];
+		}
+		
+		$newdateTimeObj = new DateTime('@' . array_keys($lastScores)[0]);
+		$interval = $newdateTimeObj->diff($curentTime);
+		
+		$returnArray["newestScore"] = [
+			"timestamp" => array_keys($lastScores)[0],
+			"scorevalue" => $lastScores[array_keys($lastScores)[0]],
+			"humantime" => $newdateTimeObj->format('Y-m-d H:i:s'),
+			"ageDays" => $interval->format('%d')
+		];
+		
+		if( ! isset( array_keys($lastScores)[1] ) ) {
+			$returnArray["priorScore"] = null;
+			return $returnArray;
+		}
+		$olddateTimeObj = new DateTime('@' . array_keys($lastScores)[1]);
+		$interval = $olddateTimeObj->diff($curentTime);
+		$returnArray["priorScore"] = [
+			"timestamp" => array_keys($lastScores)[0],
+			"scorevalue" => $lastScores[array_keys($lastScores)[1]],
+			"humantime" => $olddateTimeObj->format('Y-m-d H:i:s'),
+			"ageDays" => $interval->format('%d')
+		];
+		
+		// 
+		$interval = $olddateTimeObj->diff($newdateTimeObj);
 		$minsDiff = $interval->days * 24 * 60;
 		$minsDiff += $interval->h * 60;
 		$minsDiff += $interval->i;
 		// you can have 20 mons in a gym so max of 20 mins per minute
 		$maxNewPoints = round(($minsDiff * 20) / 60);
-		return $maxNewPoints + $priorScoreValue;
+		$acheivedPoints =
+			$returnArray["newestScore"]["scorevalue"] - $returnArray["priorScore"]["scorevalue"];
+		$performace = round( ($acheivedPoints / $maxNewPoints) * 100 );
+		
+		$returnArray["comparision"] = [
+			"performance" => $performace,
+			"diffInMins" => $minsDiff,
+			"maxNewPoints" => $maxNewPoints,
+			"acheivedPoints" => $acheivedPoints
+		];
+		
+		return $returnArray;
 	}
 	
 	public function ui_thismonthscores() {
@@ -208,7 +256,7 @@ abstract class PoGoDB {
 				$errMsg = "Impossibly low score. Your last score was $lowestPoss";
 				throw new Exception( $errMsg );
 			}
-			if( $newScore > $highestPoss ) {
+			if( $newScore > ($highestPoss * 2) ) {
 				$errMsg = "Score seems too high " .
 						  "based on your previous score of $lowestPoss.".
 						  "please check again and contact Matthew Watts if it is correct";
@@ -234,8 +282,9 @@ abstract class PoGoDB {
 	}
 	
 	// user has opted to undo their last score
-	public function action_undoPrevScore($newScore) {
-		
+	public function action_undoPrevScore() {
+		$this->expect_loggedIn();
+		$this->db_purgeLatestScoreForUser();
 	}
 	
 	// Actual DB Access functions
@@ -244,11 +293,13 @@ abstract class PoGoDB {
 	abstract protected function db_completeTransaction();
 	abstract protected function db_add_NewScore($timestamp, $newScore);
 	abstract protected function db_get_TimeStampsAndScoresByNewestFirst($from = -1, $limit = -1);
+	abstract protected function getTotalScoresForDateRange($startunixts, $endunixts);
 	abstract public function db_get_pogoName() : string;
 	abstract public function db_set_pogoName($newPogoName, $newRealName = "");
 	abstract public function db_get_expecting_response_from_user();
 	abstract public function db_set_expecting_response_from_user($response);
 	abstract public function db_get_optout_messages() : bool;
 	abstract public function db_set_optout_messages(bool $optOut);
+	abstract protected function db_purgeLatestScoreForUser();
 }
 

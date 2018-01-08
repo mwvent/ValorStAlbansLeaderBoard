@@ -2,14 +2,31 @@
 require_once("PoGoDB-SQLite3.php");
 
 class messenger_hook_class_message_strings {
-	function switchboard($trainerName) {
-		return "Hi " . $trainerName . PHP_EOL .
-			   "I have several options for you" . PHP_EOL .
+	function switchboard_less($trainerName) {
+		return "Hi " . $trainerName .
+			   " - what would you like to do next?" . PHP_EOL .
+			   "1 ) Submit a medal score " . PHP_EOL .
+			   "2 ) View this months in-progress leaderboard" . PHP_EOL .
+			   "3 ) See last months scores " . PHP_EOL .
+			   "more ) See all options " . PHP_EOL;
+	}
+	
+	function switchboard_buttons_less() {
+		return [ 1 => "1 Submit", 
+			     2 => "2 Current",
+			     3 => "3 Prev",
+			     4 => "More"
+			    ];
+	}
+	
+	function switchboard_more($trainerName) {
+		return 
 			   "1 ) Submit a medal score " . PHP_EOL .
 			   "2 ) View this months in-progress leaderboard" . PHP_EOL .
 			   "3 ) See last months scores " . PHP_EOL .
 			   "4 ) Change your trainer name " . PHP_EOL .
 			   "5 ) Toggle sending monthly reminders on/off " . PHP_EOL .
+			   "6 ) Undo A Score Submission " . PHP_EOL .
 			   "Just enter in one of these numbers to get going";
 	}
 	
@@ -18,7 +35,8 @@ class messenger_hook_class_message_strings {
 			     2 => "2 Current",
 			     3 => "3 Prev",
 			     4 => "4 Name",
-			     5 => "5 Tog"
+			     5 => "5 Tog",
+			     6 => "6 Undo"
 			    ];
 	}
 	
@@ -46,6 +64,10 @@ class messenger_hook_class_message_strings {
 	}
 	
 	function set_name_response_buttons() {
+		return [ "Yes" , "No" ];
+	}
+	
+	function yesno_buttons() {
 		return [ "Yes" , "No" ];
 	}
 	
@@ -109,22 +131,46 @@ class messenger_hook_class_message_strings {
 			   "Please try again later.";
 	}
 	
-	function score_sucess($hoursDefended = null, $maxPossibleHoursDefended = null) {
-		if( is_null( $hoursDefended ) || is_null( $maxPossibleHoursDefended ) ) {
-			return "Thanks for submitting. Keep taking those gyms :-)";
+	function score_sucess($scoreInfo) {
+		$performance =  -1;
+		if( isset($scoreInfo["priorScore"]) ) {
+			$performance = $scoreInfo["comparision"]["performance"];
 		}
-		$percentageOfPossibleMax = ($hoursDefended / $maxPossibleHoursDefended);
-		if( $percentageOfPossibleMax_as1to100 > 90 ) {
-			return "Wow what a score! :-O Turning the town red. Well done!";
-		} elseif( $percentageOfPossibleMax_as1to100 > 50 ) {
-			return "What an amazing score. Well done! :-)";
-		} elseif( $percentageOfPossibleMax_as1to100 > 30 ) {
-			return "What a fantastic score well done! :-)";
-		} elseif( $percentageOfPossibleMax_as1to100 > 20 ) {
-			return "What a great score well done! :-)";
+		
+		if( $performance > 30 ) {
+			$msg = "Wow what a score! :-O Turning the town red. Well done!";
+		} elseif( $performance > 25 ) {
+			$msg = "What an amazing score. Well done! :-)";
+		} elseif( $performance > 15 ) {
+			$msg = "What a fantastic score well done! :-)";
+		} elseif( $performance > 10 ) {
+			$msg = "What a great score well done! :-)";
+		} elseif( $performance != -1 ) {
+			$msg = "Thanks for submitting. Keep taking those gyms :-)";
 		} else {
-			return "Thanks for submitting. Keep taking those gyms :-)";
+			$msg = "Thanks for submitting your first score";
 		}
+		
+		if( $performance != -1 ) {
+			$msg .= PHP_EOL . "You defended " . $scoreInfo["comparision"]["acheivedPoints"] .
+			        " hours out of a maxiumum of " . 
+			        $scoreInfo["comparision"]["maxNewPoints"];
+		}
+		
+		return $msg;
+	}
+	
+	function confirmScoreRemoval($scoreValue, $scoreDate) {
+		return "OK you would like to remove your previous score submission of " .
+			   $scoreValue . " made at " . $scoreDate . "?";
+	}
+	
+	function cancelScoreRemoval() {
+		return "OK I will not remove that score";
+	}
+	
+	function completedScoreRemoval() {
+		return "OK that score has been removed from the system.";
 	}
 }
 
@@ -153,7 +199,6 @@ class messenger_hook_class {
 
 	public function handleMessage($senderId, $messageText) {
 		$db = new PoGoDB_SQLite3($senderId);
-		
 		
 		switch( $db->db_get_expecting_response_from_user() ) {
 			case "" :
@@ -192,6 +237,12 @@ class messenger_hook_class {
 							$this->sendMessage_response($senderId, $message);
 							$this->handleMessage($senderId, "switchboard");
 							break;
+						case "more" :
+							$username = $db->db_get_pogoName();
+							$message = $this->message_strings->switchboard_more($username);
+							$buttons = $this->message_strings->switchboard_buttons();
+							$this->sendMessage_response($senderId, $message, $buttons);
+							break;
 						case "4" : 
 						case strtolower($this->message_strings->switchboard_buttons()[4]) :
 							$message = $this->message_strings->user_requested_name_change();
@@ -211,10 +262,27 @@ class messenger_hook_class {
 							$this->sendMessage_response($senderId, $message);
 							$this->handleMessage($senderId, "switchboard");
 							break;
+						case "6" :
+						case strtolower($this->message_strings->switchboard_buttons()[6]) :
+							$lastScoreInfo = $db->ui_lastscoreinfo();
+							if( is_null( $lastScoreInfo["newestScore"] ) ) {
+								$message = "You have no scores submitted that can be undone!";
+								$this->sendMessage_response($senderId, $message);
+								$this->handleMessage($senderId, "switchboard");
+								return;
+							}
+							$message = $this->message_strings->confirmScoreRemoval(
+								$lastScoreInfo["newestScore"]["scorevalue"],
+								$lastScoreInfo["newestScore"]["humantime"]
+							);
+							$buttons = $this->message_strings->yesno_buttons();
+							$this->sendMessage_response($senderId, $message, $buttons);
+							$db->db_set_expecting_response_from_user("confirmscoreremoval");
+							break;
 						default :
 							$username = $db->db_get_pogoName();
-							$message = $this->message_strings->switchboard($username);
-							$buttons = $this->message_strings->switchboard_buttons();
+							$message = $this->message_strings->switchboard_less($username);
+							$buttons = $this->message_strings->switchboard_buttons_less();
 							$this->sendMessage_response($senderId, $message, $buttons);
 							break;
 					}
@@ -291,7 +359,8 @@ class messenger_hook_class {
 					$newScore = $db->db_get_pending_response_from_user();
 					if( trim(strtolower($messageText)) == "yes" ) {
 						$db->action_newScore($newScore);
-						$message = $this->message_strings->score_sucess();
+						$scoreInfo = $db->ui_lastscoreinfo();
+						$message = $this->message_strings->score_sucess($scoreInfo);
 						$this->sendMessage_response($senderId, $message);
 					} else {
 						$message = $this->message_strings->score_sub_cancelled();
@@ -301,6 +370,27 @@ class messenger_hook_class {
 					$message = $e->getMessage();
 					$this->sendMessage_response($senderId, $message);
 				}
+				$db->db_set_expecting_response_from_user("");
+				$this->handleMessage($senderId, "switchboard");
+				break;
+			case "confirmscoreremoval" :
+				try {
+					if( trim(strtolower($messageText)) == "yes" ) {
+						$db->action_undoPrevScore();
+						$message = $this->message_strings->completedScoreRemoval();
+						$this->sendMessage_response($senderId, $message);
+					} else {
+						$message = $this->message_strings->cancelScoreRemoval();
+						$this->sendMessage_response($senderId, $message);
+					}
+				} catch (Exception $e) {
+					$message = $e->getMessage();
+					$this->sendMessage_response($senderId, $message);
+				}
+				$db->db_set_expecting_response_from_user("");
+				$this->handleMessage($senderId, "switchboard");
+				break;
+			default :
 				$db->db_set_expecting_response_from_user("");
 				$this->handleMessage($senderId, "switchboard");
 				break;
