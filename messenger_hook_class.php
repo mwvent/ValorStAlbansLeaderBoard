@@ -150,13 +150,13 @@ class messenger_hook_class_message_strings {
 		} else {
 			$msg = "Thanks for submitting your first score";
 		}
-		
+		/*
 		if( $performance != -1 ) {
 			$msg .= PHP_EOL . "You defended " . $scoreInfo["comparision"]["acheivedPoints"] .
 			        " hours out of a maxiumum of " . 
 			        $scoreInfo["comparision"]["maxNewPoints"];
 		}
-		
+		*/
 		return $msg;
 	}
 	
@@ -204,12 +204,13 @@ class messenger_hook_class {
 	}
 	
 	public function handleMessage_switchboard_1_submitscore($db, $senderId, $messageText) {
-		if( ! $db->ui_userHasScoreRecorded() ) {
+		$scoreInfo = $db->ui_lastscoreinfo();
+		if( is_null( $scoreInfo["newestScore"] ) ) {
 			$lastscore = -1;
 			$message = $this->message_strings->sumbit_first_score();
 			$this->sendMessage_response($senderId, $message);
 		} else {
-			$lastscore = $db->ui_previousScore();
+			$lastscore = $scoreInfo["newestScore"]["scorevalue"];
 		}
 		$message = $this->message_strings->submit_score($lastscore);
 		$buttons = $this->message_strings->submit_score_buttons($lastscore);

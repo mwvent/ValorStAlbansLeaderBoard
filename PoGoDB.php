@@ -24,131 +24,86 @@ abstract class PoGoDB {
 		}
 	}
 	
-	// a different score taking UI will be presented for first score
-	// taking, this function can determine if this will be the users first
-	// submission
-	public function ui_userHasScoreRecorded() : bool {
-		$this->expect_loggedIn();
-		return ! empty( $this-> db_get_TimeStampsAndScoresByNewestFirst(0,1) );
-	}
-	
-	public function ui_minsSinceLastSubmission() {
-		$this->expect_loggedIn();
-		$lastScore = $this->db_get_TimeStampsAndScoresByNewestFirst(0,1);
-		$priorScoreTimestamp = array_keys($lastScore)[0];
-		$priorScoreValue = $lastScore[ $priorScoreTimestamp ];
-		$newerTime = new DateTime('@' .  $_SERVER['REQUEST_TIME']);
-		$newerTime->setTimezone(new DateTimeZone('Europe/London'));
-		$priorTime = new DateTime('@' . $priorScoreTimestamp);
-		$priorTime->setTimezone(new DateTimeZone('Europe/London'));
-		$interval = $priorTime->diff($newerTime);
-		$minsDiff = $interval->days * 24 * 60;
-		$minsDiff += $interval->h * 60;
-		$minsDiff += $interval->i;
-		return $minsDiff;
-	}
-	
-	public function ui_previousScore() {
-		$this->expect_loggedIn();
-		$lastScore = $this->db_get_TimeStampsAndScoresByNewestFirst(0,1);
-		if( ! isset( array_keys($lastScore)[0] ) ) {
-			return -1;
-		}
-		$priorScoreTimestamp = array_keys($lastScore)[0];
-		$priorScoreValue = $lastScore[ $priorScoreTimestamp ];
-		return $priorScoreValue;
-	}
-	
-	// the score taking UI will need a maximum possible score
-	// to validate user input
-	public function ui_maxScorePossibleSinceLastSubmission() {
-		$this->expect_loggedIn();
-		$lastScore = $this->db_get_TimeStampsAndScoresByNewestFirst(0,1);
-		$priorScoreTimestamp = array_keys($lastScore)[0];
-		$priorScoreValue = $lastScore[ $priorScoreTimestamp ];
-		$newerTime = new DateTime('@' .  $_SERVER['REQUEST_TIME']);
-		$newerTime->setTimezone(new DateTimeZone('Europe/London'));
-		$priorTime = new DateTime('@' . $priorScoreTimestamp);
-		$priorTime->setTimezone(new DateTimeZone('Europe/London'));
-		$interval = $priorTime->diff($newerTime);
-		$minsDiff = $interval->days * 24 * 60;
-		$minsDiff += $interval->h * 60;
-		$minsDiff += $interval->i;
-		// you can have 20 mons in a gym so max of 20 mins per minute
-		$maxNewPoints = round(($minsDiff * 20) / 60);
-
-		$maxNewPoints = $maxNewPoints;
-		return $maxNewPoints + $priorScoreValue;
-	}
-	
-	// the score taking UI will need a minimum possible score
-	// to validate user input
-	public function ui_minScorePossibleSinceLastSubmission() {
-		$this->expect_loggedIn();
-		$lastScore = $this->db_get_TimeStampsAndScoresByNewestFirst(0,1);
-		$priorScoreTimestamp = array_keys($lastScore)[0];
-		$priorScoreValue = $lastScore[ $priorScoreTimestamp ];
-		return $priorScoreValue;
-	}
-	
-	// returns an array with various indicators to how well
-	// the performance was on the last submission
+	// returns an array containing info
+	// about the last two scores the user submitted
+	// if a newScore parameter is supplied that will be treated as
+	// a hypothetical new score and priorScore will be the latest from the database
 	// newestScore - array or null if no scores
 	// |-timestamp
 	// | humantime
 	// | scorevalue
 	// | ageDays
+	// | ageMins
 	// priorScore - array or null if no prior
 	// |-timestamp
 	// | humantime
-	// | scoreValue
+	// | scorevalue
 	// | ageDays
-	// comparision - array or no exist if no prior
+	// | ageMins
+	// comparision - array or no exist if no prior score
 	// |- performance - a number from 0-100 representing how much of the maximum was acheived
 	//    diffInMins
 	//    maxNewPoints
 	//    acheivedPoints
-	public function ui_lastscoreinfo() {
+	public function ui_lastscoreinfo($newScore = null) {
 		$this->expect_loggedIn();
 		$returnArray = [];
 		$lastScores = $this->db_get_TimeStampsAndScoresByNewestFirst(0,2);
 		
 		$curentTime = $newerTime = new DateTime('@' .  $_SERVER['REQUEST_TIME']);
+		$curentTime->setTimezone(new DateTimeZone('Europe/London'));
 		
+		// if hypotetical new score supplied - add it to the array and sort by
+		// timestamp so the newest score is first
+		if( ! is_null( $newScore ) ) {
+			$lastScores[ $_SERVER['REQUEST_TIME'] ] = $newScore;
+		}
+		
+		// if user has no scores
 		if( empty($lastScores) ) {
 			return [ "newestScore" => null, "priorScore" => null ];
 		}
 		
+		// populate newestscore
 		$newdateTimeObj = new DateTime('@' . array_keys($lastScores)[0]);
+		$newdateTimeObj->setTimezone(new DateTimeZone('Europe/London'));
 		$interval = $newdateTimeObj->diff($curentTime);
-		
+		$minsDiff = ($interval->days * 24 * 60) + ($interval->h * 60) + $interval->i;
+		$hoursDiff_float = $minsDiff / 60;
 		$returnArray["newestScore"] = [
 			"timestamp" => array_keys($lastScores)[0],
 			"scorevalue" => $lastScores[array_keys($lastScores)[0]],
 			"humantime" => $newdateTimeObj->format('Y-m-d H:i:s'),
-			"ageDays" => $interval->format('%d')
+			"ageDays" => $interval->format('%d'),
+			"ageMins" => $minsDiff,
+			"ageHours_float" => $hoursDiff_float,
+			"maxPossNewPoints" => $hoursDiff_float * 20 // 20 mons * 1 minute
 		];
 		
+		// if no prior score
 		if( ! isset( array_keys($lastScores)[1] ) ) {
 			$returnArray["priorScore"] = null;
 			return $returnArray;
 		}
+		
+		// populate prior score
 		$olddateTimeObj = new DateTime('@' . array_keys($lastScores)[1]);
+		$olddateTimeObj->setTimezone(new DateTimeZone('Europe/London'));
 		$interval = $olddateTimeObj->diff($curentTime);
+		$minsDiff = ($interval->days * 24 * 60) + ($interval->h * 60) + $interval->i;
 		$returnArray["priorScore"] = [
 			"timestamp" => array_keys($lastScores)[0],
 			"scorevalue" => $lastScores[array_keys($lastScores)[1]],
 			"humantime" => $olddateTimeObj->format('Y-m-d H:i:s'),
-			"ageDays" => $interval->format('%d')
+			"ageDays" => $interval->format('%d'),
+			"ageMins" => $minsDiff,
+			"maxPossNewPoints" => round(($minsDiff * 20) / 60) // 20 mons * 1 minute
 		];
 		
-		// 
+		// populate comparison
 		$interval = $olddateTimeObj->diff($newdateTimeObj);
-		$minsDiff = $interval->days * 24 * 60;
-		$minsDiff += $interval->h * 60;
-		$minsDiff += $interval->i;
-		// you can have 20 mons in a gym so max of 20 mins per minute
-		$maxNewPoints = round(($minsDiff * 20) / 60);
+		$minsDiff = ($interval->days * 24 * 60) + ($interval->h * 60) + $interval->i;
+		$maxNewPoints = round(($minsDiff * 20) / 60); // 20 mons * 1 minute
 		$acheivedPoints =
 			$returnArray["newestScore"]["scorevalue"] - $returnArray["priorScore"]["scorevalue"];
 		$performace = round( ($acheivedPoints / $maxNewPoints) * 100 );
@@ -163,7 +118,7 @@ abstract class PoGoDB {
 		return $returnArray;
 	}
 	
-	public function ui_thismonthscores() {
+	public function ui_thismonthscores($rankOnly = false) {
 		$tz=new DateTimeZone('Europe/London');
 		$stimeObj = new DateTime("first day of this month", $tz);
 		$firstDateTS = $stimeObj->getTimestamp();
@@ -186,6 +141,11 @@ abstract class PoGoDB {
 						  $user . " : " . round($score,2) . " hours" . PHP_EOL;
 			$iteration += 1;
 		}
+		
+		if( $rankOnly ) {
+			$resultTxt = "";
+		}
+		
 		if( $yourrank > -1 ) {
 			$resultTxt .= "Your rank is $yourrank";
 		} else {
@@ -239,33 +199,43 @@ abstract class PoGoDB {
 			throw new Exception("Score cannot be negative");
 		}
 		
+		$lastScores = $this->ui_lastscoreinfo();
+		$userHasScoreRecorded = ! is_null( $lastScores["newestScore"] );
 		
 		// min/max check only if not a first score record
-		if( $this->ui_userHasScoreRecorded() ) {
+		if( $userHasScoreRecorded ) {
 			// check a sensible amount of time has elapsed since
 			// previous submission
-			$minsSinceLast = $this->ui_minsSinceLastSubmission();
-			if( $this->ui_minsSinceLastSubmission() < 60 ) {
+			$minsSinceLast = $lastScores["newestScore"]["ageMins"];
+			
+			if( $minsSinceLast < 60 ) {
 				$errMsg = "Sorry I can only record a score once every hour" .
 						  " it would appear you submitted one $minsSinceLast mins ago";
 				throw new Exception( $errMsg );
 			}
-			$lowestPoss = $this->ui_minScorePossibleSinceLastSubmission();
-			$highestPoss = $this->ui_maxScorePossibleSinceLastSubmission();
-			if( $newScore < $lowestPoss ) {
-				$errMsg = "Impossibly low score. Your last score was $lowestPoss";
+			
+			// check newer score is not lower than older one
+			$lastScore = $lastScores["newestScore"]["scorevalue"];
+			if( $lastScore > $newScore ) {
+				$errMsg = "Impossibly low score. Your last score was $lastScore" .
+				          ". If your previous score was wrong please use option 6 " .
+				          "to undo it";
 				throw new Exception( $errMsg );
 			}
-			if( $newScore > ($highestPoss * 2) ) {
+			
+			// check newer score is not impossibly higher than older one
+			// we will set a sensible value of 28 days increase per submission
+			// for now to allow long standing gym defenders returning
+			$newPoints = $newScore - $lastScore;
+			// $highestPoss = $lastScores["newestScore"]["maxPossNewPoints"];
+			$highestPoss = 28 * 24;
+			if( $newPoints > ($highestPoss * 2) ) {
 				$errMsg = "Score seems too high " .
-						  "based on your previous score of $lowestPoss.".
+						  "based on your previous score of $lastScore.".
 						  "please check again and contact Matthew Watts if it is correct";
 				throw new Exception( $errMsg );
 			}
 		}
-		
-		$newScore = (int)$newScore;
-		$thisTimeStamp = $_SERVER['REQUEST_TIME'];
 	}
 	
 	// user has submitted a new score
