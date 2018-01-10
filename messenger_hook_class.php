@@ -55,7 +55,8 @@ class messenger_hook_class_message_strings {
 	
 	function nameInvalid($newName) {
 		return "Sorry I don't think your name can be " . PHP_EOL .
-			   $newName . PHP_EOL . 
+			   $newName . PHP_EOL .
+			   "The name must not contain spaces and obey the Pokemon GO character limit. " . 
 			   "Please try again.";
 	}
 	
@@ -194,10 +195,11 @@ class messenger_hook_class {
 	}
 	
 	public function isAValidPogoName($name) {
+		if( strlen($name) > 20 ) return false;
 		return ( str_replace( " ", "", $name ) == $name);
 	}
 	
-	public function handleMessage_newuser($senderId, $messageText) {
+	public function handleMessage_newuser($db, $senderId, $messageText) {
 		$message = $this->message_strings->welcome_name_not_known();
 		$this->sendMessage_response($senderId, $message);
 		$db->db_set_expecting_response_from_user("setname");
@@ -319,7 +321,7 @@ class messenger_hook_class {
 
 	public function handleResponseTo_setname($db, $senderId, $messageText) {
 		if( ! $this->isAValidPogoName($messageText) ) {
-			$message = $this->message_strings->nameInvalid($newName);
+			$message = $this->message_strings->nameInvalid($messageText);
 			$this->sendMessage_response($senderId, $message);
 			return;
 		}
@@ -425,7 +427,7 @@ class messenger_hook_class {
 		
 		// a new user has spoken to bot
 		if( $expectingResponse == "" and $db->db_get_pogoName() == "" ) {
-			$this->handleMessage_newuser($senderId, $messageText);
+			$this->handleMessage_newuser($db, $senderId, $messageText);
 			return;
 		}
 		

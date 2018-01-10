@@ -1,4 +1,5 @@
 <?php
+// SELECT * FROM users; SELECT pogoname, datetime(recordedTime, 'unixepoch') as "time", recordedValue from scorelog_entries INNER JOIN users ON users.uuid = user_uuid ORDER BY recordedTime Asc;
 require_once("PoGoDB.php");
 
 class PoGoDB_SQLite3 extends PoGoDB {
@@ -59,7 +60,8 @@ class PoGoDB_SQLite3 extends PoGoDB {
 						WHERE scorelog_entries2.recordedTime < scorelog_entries.recordedTime
 						  AND scorelog_entries2.user_uuid = scorelog_entries.user_uuid
 					)
-				) as score
+				) AS score,
+				max(scorelog_entries.recordedTime) AS lastSubmittedUTS
 			FROM 
 				scorelog_entries
 			INNER JOIN users 
@@ -76,7 +78,10 @@ class PoGoDB_SQLite3 extends PoGoDB {
 		$result = $statement->execute();
 		$returnArray = [];
 		while ( $row = $result->fetchArray(SQLITE3_ASSOC) ) {
-			$returnArray[$row["pogoname"]] = $row["score"];
+			$returnArray[$row["pogoname"]] = [
+				"score" => $row["score"],
+				"lastSubTS" => $row["lastSubmittedUTS"]
+			];
 		}
 		return $returnArray;
 			

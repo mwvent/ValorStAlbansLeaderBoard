@@ -120,6 +120,8 @@ abstract class PoGoDB {
 	
 	public function ui_thismonthscores($rankOnly = false) {
 		$tz=new DateTimeZone('Europe/London');
+		$curentTime = $newerTime = new DateTime('@' .  $_SERVER['REQUEST_TIME']);
+		$curentTime->setTimezone(new DateTimeZone('Europe/London'));
 		$stimeObj = new DateTime("first day of this month", $tz);
 		$firstDateTS = $stimeObj->getTimestamp();
 		$stimeObj = new DateTime("last day of this month", $tz);
@@ -131,14 +133,31 @@ abstract class PoGoDB {
 		if( empty( $results ) ) {
 			return "Sorry there are no scores for this month yet";
 		}
-		foreach( $results as $user => $score ) {
+		foreach( $results as $user => $scoreinfo ) {
+			$score = $scoreinfo[ "score" ];
+			$lastSubTS = $scoreinfo[ "lastSubTS" ];
+			$subTime = new DateTime('@' . $lastSubTS);
+			$subTime->setTimezone(new DateTimeZone('Europe/London'));
+			$subInterval = $subTime->diff($curentTime);
+			$subInterval_human = "";
+			// format human readable age
+			if( (int)$subInterval->format('%d') > 0 ) {
+				$subInterval_human = $subInterval->format('%dd ago');
+			} elseif( (int)$subInterval->format('%h') > 0 ) {
+				$subInterval_human = $subInterval->format('%hh ago');
+			} elseif( (int)$subInterval->format('%i') > 10 ) {
+				$subInterval_human = $subInterval->format('%im ago');
+			} else {
+				$subInterval_human = "just now";
+			}
 			if( is_null($score) ) continue;
 			if($user == $this->db_get_pogoName()) {
 				$yourrank = $iteration;
 			}
 			if( $iteration > 10 ) continue;
 			$resultTxt .= $iteration . ") " . 
-						  $user . " : " . round($score,2) . " hours" . PHP_EOL;
+						  $user . " : " . round($score,2) . " hours " .
+						  "  (" . $subInterval_human . ")" . PHP_EOL;
 			$iteration += 1;
 		}
 		
@@ -156,6 +175,8 @@ abstract class PoGoDB {
 	
 	public function ui_lastmonthscores() {
 		$tz=new DateTimeZone('Europe/London');
+		$curentTime = $newerTime = new DateTime('@' .  $_SERVER['REQUEST_TIME']);
+		$curentTime->setTimezone(new DateTimeZone('Europe/London'));
 		$stimeObj = new DateTime("first day of last month", $tz);
 		$firstDateTS = $stimeObj->getTimestamp();
 		$stimeObj = new DateTime("last day of last month", $tz);
@@ -168,6 +189,8 @@ abstract class PoGoDB {
 			return "Sorry there are no scores for last month";
 		}
 		foreach( $results as $user => $score ) {
+			$score = $scoreinfo[ "score" ];
+			$lastSubTS = $scoreinfo[ "lastSubTS" ];
 			if( is_null($score) ) continue;
 			if($user == $this->db_get_pogoName()) {
 				$yourrank = $iteration;
