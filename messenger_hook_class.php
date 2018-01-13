@@ -173,6 +173,70 @@ class messenger_hook_class_message_strings {
 	function completedScoreRemoval() {
 		return "OK that score has been removed from the system.";
 	}
+	
+	function rankIcons($rankNumber) {
+		switch( $rankNumber ) {
+			default:
+				return $rankNumber;
+				break;
+		}
+	}
+	
+	// input array = 
+	// arrays with elements score, lastSubTS, pogoname, isCurrentUser
+	// and key is rank
+	function scoreBoardDataToText($results) {
+		$curentTime = $newerTime = new DateTime('@' .  $_SERVER['REQUEST_TIME']);
+		$curentTime->setTimezone(new DateTimeZone('Europe/London'));
+		$resultTxt = "";
+		$yourrank = -1;
+		if( empty( $results ) ) {
+			return "Sorry there are no scores for this month yet";
+		}
+
+		$rank = 0;
+		foreach( $results as $scoreinfo ) {
+			$score = $scoreinfo[ "score" ];
+			$user = $scoreinfo[ "pogoname" ];
+			$isCurrentUser = $scoreinfo[ "pogoname" ];
+			// ignore no score
+			if( is_null($score) ) continue;
+			// has a score so increment rank #
+			$rank++;
+			// if current user store rank
+			$yourrank = $isCurrentUser ? $rank : $yourrank;
+			// do not add ranks over 10 to list
+			if( $rank > 10 ) continue;
+			// format the unix timestamp of the sub time into
+			// a human redable interval since submission
+			$lastSubTS = $scoreinfo[ "lastSubTS" ];
+			$subTime = new DateTime('@' . $lastSubTS);
+			$subTime->setTimezone(new DateTimeZone('Europe/London'));
+			$subInterval = $subTime->diff($curentTime);
+			$subInterval_human = "";
+			// format human readable age
+			if( (int)$subInterval->format('%d') > 0 ) {
+				$subInterval_human = $subInterval->format('%dd ago');
+			} elseif( (int)$subInterval->format('%h') > 0 ) {
+				$subInterval_human = $subInterval->format('%hh ago');
+			} elseif( (int)$subInterval->format('%i') > 10 ) {
+				$subInterval_human = $subInterval->format('%im ago');
+			} else {
+				$subInterval_human = "just now";
+			}
+			// final string
+			$resultTxt .= $this->rankIcons($rank) . ") " . 
+						  $user . " : " . round($score,2) . " hours " .
+						  "  (" . $subInterval_human . ")" . PHP_EOL;
+		}
+		
+		if( $yourrank > -1 ) {
+			$resultTxt .= "Your rank is $yourrank";
+		} else {
+			$resultTxt .= "Your score will not be calulated until you have made two submissions";
+		}
+		return $resultTxt;
+	}
 }
 
 class messenger_hook_class {
@@ -221,13 +285,13 @@ class messenger_hook_class {
 	}
 	
 	public function handleMessage_switchboard_2_showscores($db, $senderId, $messageText) {
-		$message = $db->ui_thismonthscores();
+		$message = $this->message_strings->scoreBoardDataToText($db->ui_thismonthscores());
 		$this->sendMessage_response($senderId, $message);
 		$this->handleMessage($senderId, "switchboard");
 	}
 	
 	public function handleMessage_switchboard_3_showlastmscores($db, $senderId, $messageText) {
-		$message = $db->ui_lastmonthscores();
+		$message = $this->message_strings->scoreBoardDataToText($db->ui_lastmonthscores());
 		$this->sendMessage_response($senderId, $message);
 		$this->handleMessage($senderId, "switchboard");
 	}

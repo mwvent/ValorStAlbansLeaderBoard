@@ -68,6 +68,20 @@ if( isset($_REQUEST['hub_verify_token']) ) {
 set_error_handler("error_trap"); 
 set_exception_handler("error_trap"); 
 register_shutdown_function( "fatal_handler" );
-require_once("messenger_hook_class.php");
+
+// we can if the first message 
+$testUserId = "test1973173252710319";
+$senderId = null;
+$data = json_decode(file_get_contents("php://input"), true, 512, JSON_BIGINT_AS_STRING);
+if (!empty($data['entry'][0]['messaging'][0]['sender']['id'])) {
+	$senderId = $data['entry'][0]['messaging'][0]['sender']['id'];
+}
+if( $senderId == $testUserId ) {
+	chdir ( "dev/" );
+	require_once("dev/messenger_hook_class.php");
+} else {
+	require_once("messenger_hook_class.php");
+}
+
 $mhc = new messenger_hook_class($hubVerifyToken, $accessToken);
 $mhc->handleMessages(json_decode(file_get_contents("php://input"), true, 512, JSON_BIGINT_AS_STRING));

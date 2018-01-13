@@ -3,4 +3,4 @@ error_reporting( E_ALL );
 require("PoGoDB.php");
 $database = new PoGoDB();
 
-// NO FRONT PAGE IMPLEMENTED YET - USER INTERACTION IS THROUGH THE MESSENGER BOT
+$page = isset( $_GET["p"] ) ? $_GET["p"] : "livescores";

@@ -48,6 +48,7 @@ class PoGoDB_SQLite3 extends PoGoDB {
 		return $returnArray;
 	}
 	
+	// return array of arrays with elements score, lastSubTS, pogoname, isCurrentUser
 	protected function getTotalScoresForDateRange($startunixts, $endunixts) {
 		$sql = "
 			SELECT
@@ -72,15 +73,21 @@ class PoGoDB_SQLite3 extends PoGoDB {
 			GROUP BY
 				pogoname
 			ORDER BY score DESC; ";
+		$currentUserName = $this->db_get_pogoName();
 		$statement = $this->db_connection->prepare($sql);
 		$statement->bindValue(':startunixts', $startunixts);
 		$statement->bindValue(':endunixts', $endunixts);
 		$result = $statement->execute();
 		$returnArray = [];
+		$iteration = 0;
 		while ( $row = $result->fetchArray(SQLITE3_ASSOC) ) {
-			$returnArray[$row["pogoname"]] = [
+			$iteration++;
+			$isCurrentUser = ($currentUserName == $row["pogoname"]);
+			$returnArray[$iteration] = [
 				"score" => $row["score"],
-				"lastSubTS" => $row["lastSubmittedUTS"]
+				"lastSubTS" => $row["lastSubmittedUTS"],
+				"pogoname" => $row["pogoname"],
+				"isCurrentUser" => ($currentUserName == $row["pogoname"])
 			];
 		}
 		return $returnArray;
