@@ -19,9 +19,13 @@ abstract class PoGoDB {
 	// header function to be called for each function that expects a
 	// logged in user
 	public function expect_loggedIn() {
-		if ( is_null ( $this->current_user_facebook_uuid ) ) {
+		if ( ! $this->user_loggedIn() ) {
 			throw new Exception("Expected logged in user!");
 		}
+	}
+	
+	public function user_loggedIn() {
+		return ! is_null ( $this->current_user_facebook_uuid );
 	}
 	
 	// returns an array containing info

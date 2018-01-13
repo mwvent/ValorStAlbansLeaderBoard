@@ -198,7 +198,7 @@ class messenger_hook_class_message_strings {
 		foreach( $results as $scoreinfo ) {
 			$score = $scoreinfo[ "score" ];
 			$user = $scoreinfo[ "pogoname" ];
-			$isCurrentUser = $scoreinfo[ "pogoname" ];
+			$isCurrentUser = $scoreinfo[ "isCurrentUser" ];
 			// ignore no score
 			if( is_null($score) ) continue;
 			// has a score so increment rank #
@@ -286,13 +286,18 @@ class messenger_hook_class {
 	
 	public function handleMessage_switchboard_2_showscores($db, $senderId, $messageText) {
 		$message = $this->message_strings->scoreBoardDataToText($db->ui_thismonthscores());
-		$this->sendMessage_response($senderId, $message);
-		$this->handleMessage($senderId, "switchboard");
+		$url = [
+			"url" => "https://wattz.org.uk/pogosta/valor/leaderboard/?p=livescores_simples",
+			"title" => "Full List"
+		];
+		$buttons = $this->message_strings->switchboard_buttons_less();
+		$this->sendMessage_response($senderId, $message, $buttons, $url);
 	}
 	
 	public function handleMessage_switchboard_3_showlastmscores($db, $senderId, $messageText) {
 		$message = $this->message_strings->scoreBoardDataToText($db->ui_lastmonthscores());
-		$this->sendMessage_response($senderId, $message);
+		$buttons = $this->message_strings->switchboard_buttons_less();
+		$this->sendMessage_response($senderId, $message, $buttons);
 		$this->handleMessage($senderId, "switchboard");
 	}
 	
@@ -518,7 +523,7 @@ class messenger_hook_class {
 		}	
 	}
 	
-	public function sendMessage_response($recipientID, $messageText, $buttons = []) {
+	public function sendMessage_response($recipientID, $messageText, $buttons = [], $urlb = null) {
 		$response = [
 				'recipient' =>	[ 'id' => $recipientID ],
 				'message' =>	[ 'text' => $messageText ],
@@ -526,20 +531,36 @@ class messenger_hook_class {
 			];
 		if( ! empty( $buttons ) ) {
 			$quickreplies = [];
+			$sbuttons = [];
 			foreach( $buttons as $buttontxt ) {
 				$quickreplies[] = [
 									"content_type" => "text",
 									"title" => $buttontxt,
 									"payload" => $buttontxt
 								  ];
+				
 			}
-			$response["message"]["quick_replies"]=$quickreplies;
+			
+			$response["message"]["quick_replies"]=$quickreplies;			
 		}
+		
+		if( ! is_null($urlb) ) {
+			$sbuttons[] = [
+								 "type" => "web_url",
+								 "url" => $urlb["url"],
+								 "title" => $urlb["title"],
+								 "webview_height_ratio" => "full",
+								 "fallback_url" => $urlb["url"] . "&fb"
+							];
+			$response["buttons"]=$sbuttons;
+		}
+		
 		$ch = curl_init('https://graph.facebook.com/v2.6/me/messages?access_token='.$this->accessToken);
 		curl_setopt($ch, CURLOPT_POST, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($response));
 		curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-		curl_exec($ch);
+		$response = curl_exec($ch);
+		error_log( $response. PHP_EOL ,3, "/tmp/debug" );
 		curl_close($ch);
 	}
 	

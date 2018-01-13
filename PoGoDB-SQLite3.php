@@ -73,7 +73,7 @@ class PoGoDB_SQLite3 extends PoGoDB {
 			GROUP BY
 				pogoname
 			ORDER BY score DESC; ";
-		$currentUserName = $this->db_get_pogoName();
+		$currentUserName = $this->user_loggedIn() ? $this->db_get_pogoName() : "";
 		$statement = $this->db_connection->prepare($sql);
 		$statement->bindValue(':startunixts', $startunixts);
 		$statement->bindValue(':endunixts', $endunixts);
