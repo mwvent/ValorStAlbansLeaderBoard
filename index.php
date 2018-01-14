@@ -21,8 +21,56 @@ switch( $page ) {
 	// key of main array is rank number
 	//ublic function ui_thismonthscores($rankOnly = false)
 function livescores_simples() {
-	echo "<html><head><title>This Months Live Scores</title></head>";
-	echo "<body>";
+	?>
+<html>
+	<head>
+		<title>This Months Live Scores</title>
+		<style>
+			body {
+				background-color: 100000;
+			}
+			#header {
+				color: AA0000;
+				align: center;
+				width: 100%;
+				font-size: 10vw;
+			}
+			#subh {
+				color: white;
+				margin-bottom: 30px;
+			}
+			tr {
+				color: white;
+			}
+			tr:nth-child(even) {
+				background-color: 220000;
+			}
+			tr:nth-child(odd) {
+				background-color: 550000;
+			}
+			th {
+			  font-size: 4vw;
+			  text-align: left;
+			}
+			td {
+			  font-size: 5vw;
+			  padding-right: 10px;
+			}
+			td:nth-child(1) {
+				font-size: 3vw;
+				
+				padding-right: 30px;
+			}
+			td:nth-child(4) {
+				font-size: 3vw;
+				padding-right: 0px;
+			}
+		</style>
+</head>
+<body>
+	<div id='header'>Team Valor</div>
+	<div id='subh'>Live gym leaderboard</div>
+<?php
 	$database = new PoGoDB_SQLite3();
 	$scores = $database->ui_thismonthscores();
 	$curentTime = $newerTime = new DateTime('@' .  $_SERVER['REQUEST_TIME']);

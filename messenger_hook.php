@@ -1,4 +1,6 @@
 <?php
+
+//error_log( file_get_contents("php://input"). PHP_EOL ,3, "/tmp/debug" );
 require_once("settings.php");
 
 // messy error trapping functions 
@@ -70,7 +72,7 @@ set_exception_handler("error_trap");
 register_shutdown_function( "fatal_handler" );
 
 // we can if the first message 
-$testUserId = "1973173252710319";
+$testUserId = "off1973173252710319";
 $senderId = null;
 $data = json_decode(file_get_contents("php://input"), true, 512, JSON_BIGINT_AS_STRING);
 if (!empty($data['entry'][0]['messaging'][0]['sender']['id'])) {

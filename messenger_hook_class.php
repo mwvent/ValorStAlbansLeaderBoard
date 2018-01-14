@@ -225,7 +225,7 @@ class messenger_hook_class_message_strings {
 				$subInterval_human = "just now";
 			}
 			// final string
-			$resultTxt .= $this->rankIcons($rank) . ") " . 
+			$resultTxt .= $this->rankIcons($rank) . " ) " . 
 						  $user . " : " . round($score,2) . " hours " .
 						  "  (" . $subInterval_human . ")" . PHP_EOL;
 		}
@@ -251,10 +251,56 @@ class messenger_hook_class {
 	}
 
 	public function handleMessages($data) {
-		foreach ($data['entry'][0]['messaging'] as $message) {		
-			$senderId = $message['sender']['id'];
-			$messageText = $message['message']['text'];
-			$this->handleMessage($senderId, $messageText);
+		
+		foreach ($data['entry'][0]['messaging'] as $event) {
+			// handle postback
+			if( isset( $event['postback'] ) ) {
+				$postback = $event['postback'];
+				$senderId = $event['sender']['id'];
+				$title = $postback['title'];
+				$payload = $postback['payload'];
+				$this->handlePostback($senderId, $payload, $title);
+				return;
+			}
+			// handle 'normal' message
+			if( isset( $event['sender']['id'] ) and isset( $event['message']['text'] ) ) {
+				$senderId = $event['sender']['id'];
+				$messageText = $event['message']['text'];
+				$this->handleMessage($senderId, $messageText);
+				return;
+			}
+		}
+		
+	}
+	
+	public function handlePostback($senderId, $payload, $title) {
+		$db = new PoGoDB_SQLite3($senderId);
+		$db->db_set_expecting_response_from_user("");
+		switch( $payload ) {
+			case "welcome" :
+				$this->handleMessage($senderId, "switchboard", "hi");
+				break;
+			case "handleMessage_switchboard_1_submitscore" :
+				$this->handleMessage_switchboard_1_submitscore($db, $senderId, "");
+				break;
+			case "handleMessage_switchboard_2_showscores" :
+				$this->handleMessage_switchboard_2_showscores($db, $senderId, "");
+				break;
+			case "handleMessage_switchboard_3_showlastmscores" :
+				$this->handleMessage_switchboard_3_showlastmscores($db, $senderId, "");
+				break;
+			case "handleMessage_switchboard_4_namechange" :
+				$this->handleMessage_switchboard_4_namechange($db, $senderId, "");
+				break;
+			case "handleMessage_switchboard_5_toggleautomsg" :
+				$this->handleMessage_switchboard_5_toggleautomsg($db, $senderId, "");
+				break;
+			case "handleMessage_switchboard_6_undo" :
+				$this->handleMessage_switchboard_6_undo($db, $senderId, "");
+				break;
+			default :
+				$this->handleMessage_switchboard_show($db, $senderId, "");
+				break;
 		}
 	}
 	
@@ -290,6 +336,7 @@ class messenger_hook_class {
 			"url" => "https://wattz.org.uk/pogosta/valor/leaderboard/?p=livescores_simples",
 			"title" => "Full List"
 		];
+		//$message .= PHP_EOL . "For the full list - " . $url["url"];
 		$buttons = $this->message_strings->switchboard_buttons_less();
 		$this->sendMessage_response($senderId, $message, $buttons, $url);
 	}
@@ -545,13 +592,13 @@ class messenger_hook_class {
 		}
 		
 		if( ! is_null($urlb) ) {
-			$sbuttons[] = [
+			$sbuttons[] = [[
 								 "type" => "web_url",
 								 "url" => $urlb["url"],
 								 "title" => $urlb["title"],
 								 "webview_height_ratio" => "full",
 								 "fallback_url" => $urlb["url"] . "&fb"
-							];
+							]];
 			$response["buttons"]=$sbuttons;
 		}
 		
@@ -560,7 +607,6 @@ class messenger_hook_class {
 		curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($response));
 		curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
 		$response = curl_exec($ch);
-		error_log( $response. PHP_EOL ,3, "/tmp/debug" );
 		curl_close($ch);
 	}
 	
