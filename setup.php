@@ -8,7 +8,9 @@ $response = [
 		"locale" => "default",
 		"call_to_actions" => [
 			[ "title" => "Submit Score", "type" => "postback", "payload" => "handleMessage_switchboard_1_submitscore" ],
-			[ "title" => "This Months Scores", "type" => "postback", "payload" => "handleMessage_switchboard_2_showscores" ],
+//			[ "title" => "This Months Scores", "type" => "postback", "payload" => "handleMessage_switchboard_2_showscores" ],
+			[ "type"=>"web_url","title"=>"This Months Scores","url"=>"https://wattz.org.uk/pogosta/valor/leaderboard/","webview_height_ratio"=>"full"],
+
 			[ "title" => "Menu", "type" => "postback", "payload" => "welcome" ],
 		]
 	]]

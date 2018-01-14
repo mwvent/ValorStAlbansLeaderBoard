@@ -430,6 +430,12 @@ class messenger_hook_class {
 				$this->handleMessage_switchboard_6_undo($db, $senderId, $messageText);
 				break;
 			default :
+				if( is_numeric(trim($messageText)) ) {
+					if( (int)$messageText > 1000 ) {
+						$this->handleResponseTo_submitscore($db, $senderId, $messageText);
+						return;
+					}
+				}
 				$this->handleMessage_switchboard_show($db, $senderId, $messageText);
 				break;
 		}
@@ -496,7 +502,7 @@ class messenger_hook_class {
 		} catch (Exception $e) {
 			$message = $e->getMessage();
 			$this->sendMessage_response($senderId, $message);
-			$this->handleMessage_switchboard_show($db, $senderId, $messageText);
+			$this->handleMessage_switchboard_show($db, $senderId, "");
 			return ;
 		}
 	}
@@ -592,13 +598,13 @@ class messenger_hook_class {
 		}
 		
 		if( ! is_null($urlb) ) {
-			$sbuttons[] = [[
+			$sbuttons[] = [
 								 "type" => "web_url",
 								 "url" => $urlb["url"],
 								 "title" => $urlb["title"],
 								 "webview_height_ratio" => "full",
 								 "fallback_url" => $urlb["url"] . "&fb"
-							]];
+							];
 			$response["buttons"]=$sbuttons;
 		}
 		
